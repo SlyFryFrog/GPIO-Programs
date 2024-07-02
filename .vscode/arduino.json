@@ -1,0 +1,6 @@
+{
+    "sketch": "Arduino\\Display\\Display.ino",
+    "board": "arduino:avr:uno",
+    "port": "COM5",
+    "programmer": "arduinoisp"
+}
