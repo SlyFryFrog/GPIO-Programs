@@ -1,61 +1,82 @@
-constexpr int PIN_A = 13;
-constexpr int PIN_B = 12;
-constexpr int PIN_C = 11;
-constexpr int PIN_D = 10;
-constexpr int PIN_E = 9;
-constexpr int PIN_F = 8;
-constexpr int PIN_G = 7;
-constexpr int PIN_DP = 6;
+#include <DHT.h>
+#include <DHT_U.h>
+#include <SevSeg.h>
+
+#define DHT11_PIN 13
+
+DHT dht11(DHT11_PIN, DHT11);
+SevSeg sevseg; // Initiate a seven segment controller object
+
+constexpr long DISPLAY_DELAY = 5000;
+bool displayHumidity = true;
+
 
 void setup()
 {
-	// Sets each output pin
-	for (int i = 6; i <= 13; i++)
-	{
-		pinMode(i, OUTPUT);
-	}
+	byte numDigits = 4;
+	byte digitPins[] = {17, 16, 15, 14};
+	byte segmentPins[] = {12, 11, 10, 9, 8, 7, 6, 5};
+	bool resistorsOnSegments = 1;
+	sevseg.begin(COMMON_CATHODE, numDigits, digitPins, segmentPins, resistorsOnSegments);
+	sevseg.setBrightness(90);
+	Serial.begin(9600);
+	dht11.begin(); // Initialize the sensor
+	get_info(displayHumidity);
 }
 
 void loop()
 {
-	// 97.1
-	display(1, 1, 1, 0, 0, 1, 1, 0);
-	delay(1000);
+	static unsigned long lastDisplayTime = 0;
 
-	display(1, 1, 1, 0, 0, 0, 0, 1);
-	delay(1000);
+	unsigned long currentTime = millis();
 
-	display(0, 1, 1, 0, 0, 0, 0, 0);
-	delay(1000);
+	if (currentTime - lastDisplayTime >= DISPLAY_DELAY)
+	{
+		lastDisplayTime = currentTime;
+		get_info(displayHumidity);
+	}
 
-	clearDisplay();
-	delay(1000);
+	sevseg.refreshDisplay(); // Must run repeatedly
 }
 
-/**
- * @brief Writes each pin to LOW / 0.
- */
-void clearDisplay()
+void get_info(bool &displayHumidity)
 {
-	for (int i = 6; i <= 13; i++)
+	float humi = dht11.readHumidity();
+	float tempC = dht11.readTemperature();
+
+	if (isnan(humi) || isnan(tempC))
 	{
-		digitalWrite(i, LOW);
+		Serial.println("Failed to read from DHT11 sensor!");
+	}
+	else
+	{
+		long valueWhole;
+		int valueDecimalPos;
+
+		if (displayHumidity)
+		{
+			convertValues(humi, valueWhole, valueDecimalPos);
+			Serial.print("Humidity: ");
+			Serial.print(humi);
+			Serial.print("% | ");
+			displayHumidity = false;
+		}
+		else
+		{
+			convertValues(tempC, valueWhole, valueDecimalPos);
+			Serial.print("Temperature: ");
+			Serial.print(tempC);
+			Serial.println("C");
+			displayHumidity = true;
+		}
+
+		sevseg.setNumber(valueWhole, valueDecimalPos);
 	}
 }
 
-/**
- * @brief Writes the inputted states to the display.
- *
- * @param state HIGH or LOW / 1 or 0 for each segment of the display.
- */
-void display(int a_state, int b_state, int c_state, int d_state, int e_state, int f_state, int g_state, int dp_state)
+void convertValues(const float value, long &wholeNumber, int &decimalPos)
 {
-	digitalWrite(PIN_A, a_state);
-	digitalWrite(PIN_B, b_state);
-	digitalWrite(PIN_C, c_state);
-	digitalWrite(PIN_D, d_state);
-	digitalWrite(PIN_E, e_state);
-	digitalWrite(PIN_F, f_state);
-	digitalWrite(PIN_G, g_state);
-	digitalWrite(PIN_DP, dp_state);
+	String valueStr = String(value);
+	decimalPos = valueStr.indexOf('.') == -1 ? 0 : valueStr.length() - valueStr.indexOf('.') - 1;
+	wholeNumber = value * pow(10, decimalPos);
 }
